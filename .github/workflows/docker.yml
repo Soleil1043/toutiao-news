@@ -13,7 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write           # 推 GHCR 需要；不推镜像可删
 
     steps:
       - name: 检出代码
@@ -67,10 +66,3 @@ jobs:
         if: failure()
         working-directory: toutiao_backend
         run: docker compose logs
-
-      - name: 推送镜像到 GHCR（可选，注释掉可跳过）
-        if: always()
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          docker tag toutiao-backend:latest ghcr.io/${{ github.repository_owner | lower }}/toutiao-backend:latest
-          docker push ghcr.io/${{ github.repository_owner | lower }}/toutiao-backend:latest
