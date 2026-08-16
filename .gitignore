@@ -1,0 +1,23 @@
+# 密钥与敏感配置
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 前端
+node_modules/
+dist/
+
+# IDE
+.idea/
+.vscode/
+
+# WorkBuddy 项目数据（本地记忆，不提交）
+.workbuddy/
+
+# 本地私有文档（仅保留在本地，不提交）
+toutiao_backend/文档/踩坑记录.md
+执行报告.md

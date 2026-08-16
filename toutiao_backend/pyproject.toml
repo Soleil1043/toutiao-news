@@ -1,0 +1,17 @@
+[project]
+name = "toutiao-backend"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.141.1",
+    "httpx>=0.28.0",
+    "uvicorn>=0.52.1",
+    "sqlalchemy>=2.0.51",
+    "aiomysql==0.3.2",
+    "pydantic>=2.13.4",
+    "bcrypt==3.2.2",
+    "passlib == 1.7.4",
+    "starlette == 1.6.0",
+    "redis==8.1.0",
+]
+
