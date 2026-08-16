@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
 import uuid
-from idlelib import query
 
 from fastapi import HTTPException
 from sqlalchemy import select, update
