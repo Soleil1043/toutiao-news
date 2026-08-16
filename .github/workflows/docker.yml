@@ -70,10 +70,7 @@ jobs:
 
       - name: 推送镜像到 GHCR（可选，注释掉可跳过）
         if: always()
-        env:
-          # GHCR 要求用户名小写，github.repository_owner 是原始大小写
-          IMAGE_NAMESPACE: ${{ github.repository_owner | lower }}
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          docker tag toutiao-backend:latest ghcr.io/${IMAGE_NAMESPACE}/toutiao-backend:latest
-          docker push ghcr.io/${IMAGE_NAMESPACE}/toutiao-backend:latest
+          docker tag toutiao-backend:latest ghcr.io/${{ github.repository_owner | lower }}/toutiao-backend:latest
+          docker push ghcr.io/${{ github.repository_owner | lower }}/toutiao-backend:latest
