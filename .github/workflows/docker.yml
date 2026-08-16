@@ -1,0 +1,76 @@
+name: Docker Build & Smoke Test
+
+on:
+  push:
+    branches: [main]
+    paths:                      # 只有后端或工作流文件变更才触发
+      - "toutiao_backend/**"
+      - ".github/workflows/docker.yml"
+  workflow_dispatch:            # 支持在 Actions 页面手动触发
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write           # 推 GHCR 需要；不推镜像可删
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 生成 CI 用的 .env（仓库里没有 .env，compose 的 env_file 需要它）
+        working-directory: toutiao_backend
+        run: |
+          cat > .env <<'EOF'
+          DB_HOST=mysql
+          DB_PORT=3306
+          DB_USER=root
+          DB_PASSWORD=root123456
+          DB_NAME=news_app
+          REDIS_HOST=redis
+          REDIS_PORT=6379
+          REDIS_PASSWORD=redis123
+          REDIS_DB=0
+          OPENAI_API_KEY=
+          OPENAI_BASE_URL=https://api.deepseek.com/v1/chat/completions
+          OPENAI_MODEL=deepseek-v4-flash
+          EOF
+
+      - name: 校验 compose 配置
+        working-directory: toutiao_backend
+        run: docker compose config --quiet
+
+      - name: 构建后端镜像
+        working-directory: toutiao_backend
+        run: docker compose build backend
+
+      - name: 启动全部服务并冒烟测试
+        working-directory: toutiao_backend
+        run: |
+          docker compose up -d --no-build
+          # 等后端就绪（最多 60 秒）
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:8000/ > /dev/null 2>&1 && { echo "✅ 后端已就绪"; break; }
+            sleep 2
+          done
+          # ① 健康检查
+          curl -fsS http://localhost:8000/ | grep -q "Hello World" && echo "✅ 健康检查通过"
+          # ② 分类接口（验证 MySQL + Redis 链路）
+          curl -fsS "http://localhost:8000/api/news/categories" | grep -q '"code":200' && echo "✅ 分类接口通过"
+          # ③ 注册接口（验证建表 + 密码加密 + token）
+          curl -fsS -X POST http://localhost:8000/api/users/register \
+            -H "Content-Type: application/json" \
+            -d '{"username":"ci_test","password":"test123456"}' | grep -q '"code":200' && echo "✅ 注册接口通过"
+
+      - name: 收集日志（仅失败时）
+        if: failure()
+        working-directory: toutiao_backend
+        run: docker compose logs
+
+      - name: 推送镜像到 GHCR（可选，注释掉可跳过）
+        if: always()
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker tag toutiao-backend:latest ghcr.io/${{ github.repository }}/toutiao-backend:latest
+          docker push ghcr.io/${{ github.repository }}/toutiao-backend:latest

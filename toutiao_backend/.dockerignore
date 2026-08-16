@@ -1,0 +1,14 @@
+# 本地虚拟环境与缓存
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# 敏感配置（容器内通过 compose env_file 注入，禁止打进镜像）
+.env
+.env.local
+
+# 版本库与本地文档
+.git/
+.gitignore
+文档/

@@ -1,0 +1,74 @@
+# Docker Compose 编排：MySQL + Redis + FastAPI 后端
+#
+# 用法：
+#   1) 仅容器化 MySQL/Redis（推荐本地开发，后端仍用 uv run 在本机跑）：
+#      docker compose up -d mysql redis
+#   2) 全量容器化（后端也进容器）：
+#      docker compose up -d --build
+#
+# 说明：compose 会自动读取本目录下的 .env 做变量插值（${DB_PASSWORD} 等），
+#       后端容器通过 env_file 注入 .env 全部变量，并用 environment 覆盖 host。
+name: toutiao-news
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: toutiao-mysql
+    restart: unless-stopped
+    environment:
+      # 用 .env 中的 DB_PASSWORD 初始化 root 密码，保证后端连接串无需改动
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root123456}
+      MYSQL_DATABASE: ${DB_NAME:-news_app}
+      TZ: Asia/Shanghai
+    # aiomysql 对 MySQL 8 默认认证插件 caching_sha2_password 兼容性差，
+    # 固定为 mysql_native_password 保证连接稳定
+    command:
+      - --default-authentication-plugin=mysql_native_password
+    ports:
+      - "3307:3306"          # 宿主 3307，避开本机已运行的 MySQL(3306)
+    volumes:
+      - mysql-data:/var/lib/mysql
+      # 首次启动自动执行建库建表脚本（仅首次生效）
+      - ./database.sql:/docker-entrypoint-initdb.d/database.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_PASSWORD:-root123456}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7
+    container_name: toutiao-redis
+    restart: unless-stopped
+    # 密码取自 .env 的 REDIS_PASSWORD（与本地连接保持一致）
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-redis123}", "--appendonly", "yes"]
+    ports:
+      - "6380:6379"          # 宿主 6380，避开本机已运行的 Redis(6379)
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis123}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: .
+    container_name: toutiao-backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # 容器内走 compose 内网，覆盖 .env 中的 localhost（仅对容器生效）
+      DB_HOST: mysql
+      REDIS_HOST: redis
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  mysql-data:
+  redis-data:

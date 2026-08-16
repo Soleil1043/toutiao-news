@@ -1,5 +1,7 @@
 # AI 掘金头条新闻系统（toutiao-news）
 
+[![Docker Build & Smoke Test](https://github.com/Soleil1043/toutiao-news/actions/workflows/docker.yml/badge.svg)](https://github.com/Soleil1043/toutiao-news/actions/workflows/docker.yml)
+
 前后端分离的新闻资讯平台：后端 FastAPI 提供 RESTful API 与 SSE 流式 AI 对话接口，前端 Vue 3 移动端，覆盖用户、新闻、收藏、浏览历史与 AI 问答的完整业务闭环。
 
 ## 功能特性
@@ -20,14 +22,20 @@
 | 缓存 | Redis（`redis.asyncio`） |
 | AI 调用 | httpx（流式转发 OpenAI 兼容接口） |
 | 前端 | Vue 3 + Vite 7 + Vant 4 + Pinia + vue-router |
+| 容器化 | Dockerfile + Docker Compose（编排后端 / MySQL / Redis） |
+| CI/CD | GitHub Actions（push 自动构建镜像 + compose 起服务 + 接口冒烟测试） |
 | 依赖管理 | uv（后端）/ npm（前端） |
 
 ## 项目结构
 
 ```
 toutiao-news/
+├── .github/workflows/       # GitHub Actions CI（构建 + 冒烟测试）
 ├── toutiao_backend/          # FastAPI 后端
 │   ├── main.py               # 应用入口（CORS、路由挂载、异常处理器）
+│   ├── Dockerfile            # 后端镜像（uv 官方镜像）
+│   ├── docker-compose.yml    # MySQL + Redis + 后端 编排
+│   ├── .dockerignore         # 排除 .env / .venv 进镜像
 │   ├── routers/              # 路由层（users / news / favorite / history / chat）
 │   ├── schemas/              # Pydantic 请求/响应模型
 │   ├── models/               # SQLAlchemy ORM 模型（8 张表）
@@ -65,6 +73,28 @@ cd toutiao_frontend
 npm install
 npm run dev                 # http://localhost:5173，/api 代理到后端 8000
 ```
+
+### Docker 一键启动（可选，不需要本地装 MySQL/Redis/Python）
+
+```bash
+cd toutiao_backend
+docker compose up -d --build    # 拉起 MySQL(3307) + Redis(6380) + 后端(8000)
+docker compose ps               # 查看三服务状态
+```
+
+- 首次启动自动执行 `database.sql` 建表；宿主机端口 3307/6380 避开本机已运行的 MySQL(3306)/Redis(6379)
+- 停止：`docker compose down`（数据卷保留）；彻底清理：`docker compose down -v`
+
+## 持续集成（CI）
+
+GitHub Actions 工作流（`.github/workflows/docker.yml`）在每次 push 到 main 时自动：
+
+1. 校验 `docker compose config`
+2. 构建后端镜像（Dockerfile）
+3. compose 起 MySQL / Redis / 后端 三服务
+4. 接口冒烟测试：健康检查 → 分类接口（MySQL+Redis 链路）→ 注册接口（建表+加密+token）
+
+可在 [Actions 页面](https://github.com/Soleil1043/toutiao-news/actions) 查看运行结果。
 
 ## 接口一览（20+）
 

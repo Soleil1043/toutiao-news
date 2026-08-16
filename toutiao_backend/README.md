@@ -13,7 +13,7 @@
 - [5. API 接口一览](#5-api-接口一览)
 - [6. AI 对话接口](#6-ai-对话接口)
 - [7. 项目结构](#7-项目结构)
-- [8. 相关文档](#8-相关文档)
+- [8. Docker 部署（可选）](#8-docker-部署可选)
 
 ---
 
@@ -34,8 +34,11 @@
 - **uv**（依赖与虚拟环境管理）
 - **MySQL 8**（本地服务，默认端口 3306）
 - **Redis**（本地服务，默认端口 6379）
+- **Docker + Docker Compose**（可选：免装 MySQL/Redis 一键容器化启动，见 3.2）
 
 ## 3. 快速开始
+
+### 3.1 本地直接运行
 
 ```bash
 # 1. 进入后端目录
@@ -55,6 +58,17 @@ cp .env.example .env
 #    Git Bash 下需用 `python -m` 方式启动；直接跑 uvicorn.exe 会报
 #    "uv trampoline failed to canonicalize script path"
 uv run python -m uvicorn main:app --reload
+```
+
+### 3.2 Docker 一键启动（可选）
+
+```bash
+cd toutiao_backend
+docker compose up -d --build
+# 自动拉起 MySQL(宿主3307) + Redis(宿主6380) + 后端(8000)
+# 首次启动自动执行 database.sql 建表；端口避开本机已运行的 3306/6379
+docker compose ps          # 查看状态
+docker compose down        # 停止（数据保留）
 ```
 
 启动成功后：
@@ -192,4 +206,41 @@ toutiao_backend/
 └── 文档/                    # 项目文档
 ```
 
-# 
+## 8. Docker 部署（可选）
+
+项目提供了 `Dockerfile` 与 `docker-compose.yml`，可用 Docker 一键拉起 MySQL、Redis 与后端服务。
+
+> 前提：本机已安装并启动 **Docker Desktop**（Windows 系统需先安装，官网 https://www.docker.com/products/docker-desktop/），安装后执行 `docker --version` 验证。
+
+### 8.1 仅容器化 MySQL / Redis（推荐本地开发）
+
+如果只想用 Docker 替代本机的 MySQL / Redis，后端仍以 `uv run` 方式在本机开发：
+
+```bash
+cd toutiao_backend
+docker compose up -d mysql redis
+```
+
+- MySQL 首次启动会自动执行 `database.sql` 完成建库建表，数据存放在命名卷 `mysql-data`，容器重启不丢；
+- 两服务映射到本机 `3306` / `6379` 端口，`.env` 的 `DB_HOST=localhost`、`REDIS_HOST=localhost` 无需修改；
+- 注意：若本机 3306 / 6379 已被本机已安装的 MySQL / Redis 占用，需先停掉本机服务，或调整 compose 的端口映射。
+
+### 8.2 全量容器化（后端也进容器）
+
+```bash
+cd toutiao_backend
+docker compose up -d --build
+```
+
+- 后端容器通过 compose 内网直接访问 `mysql` / `redis`（`DB_HOST=mysql`、`REDIS_HOST=redis` 由 compose 覆盖，`.env` 里的 localhost 仅用于本机开发）；
+- 数据库 / Redis 密码沿用 `.env` 的 `DB_*` / `REDIS_*`（compose 自动读取本目录 `.env` 插值），无需额外配置；
+- 修改后端代码后需重新构建：`docker compose up -d --build backend`；
+- 前端仍在本机 `npm run dev`，vite 代理 `/api` → `127.0.0.1:8000` 即可联调；
+- 停止服务：`docker compose down`；连数据卷一起删除：`docker compose down -v`（**会清空 MySQL 数据，慎用**）。
+
+常见问题：
+
+- `docker compose` 找不到服务 → 确认已 `cd toutiao_backend` 再执行；
+- MySQL 容器反复重启 → 检查 healthcheck 密码是否与 `.env` 的 `DB_PASSWORD` 一致（compose 用它初始化 root 密码）；
+- 后端容器 500 / 连不上数据库 → 执行 `docker compose logs backend` 查看日志，并确认 `.env` 中 `DB_PASSWORD` 非空。
+
